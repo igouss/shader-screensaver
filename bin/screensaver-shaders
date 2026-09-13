@@ -1,0 +1,148 @@
+#!/bin/bash
+
+# Manage the shader screensaver's collection (~/.config/shader-screensaver/shaders,
+# a symlink into ~/Projects/shader-screensaver). Adds and removals are committed
+# to git automatically.
+
+set -euo pipefail
+shopt -s nullglob
+
+dir="${XDG_CONFIG_HOME:-$HOME/.config}/shader-screensaver/shaders"
+state="${XDG_STATE_HOME:-$HOME/.local/state}/shader-screensaver"
+bin="$HOME/.local/bin/shader-screensaver"
+
+usage() {
+  cat >&2 <<EOF
+usage: screensaver-shaders <command>
+  add [name]           save a shader from stdin, or from the clipboard when stdin is a terminal
+  remove <name|last>   delete a shader (last = the one shown most recently)
+  preview [name|last]  show a shader fullscreen now (random when no name); any key exits
+  check <file> [png]   compile a shader offscreen; with png, also render a thumbnail
+                       and report brightness, motion and cost
+  last                 name of the shader shown most recently
+  history [n]          when each of the last n (default 20) shaders was shown
+  list                 the collection, with when each was last shown (or "new")
+  pick                 the order the next screensaver run will try shaders in
+EOF
+  exit 1
+}
+
+die() {
+  echo "screensaver-shaders: $*" >&2
+  exit 1
+}
+
+name_of() {
+  local base=${1##*/}
+  echo "${base%.*}"
+}
+
+last_name() {
+  [[ -s $state/current ]] || die "no shader has been shown yet"
+  name_of "$(<"$state/current")"
+}
+
+# Accepts a collection name (with or without extension), "last", or a path.
+resolve() {
+  local want=$1 f
+  [[ $want == last ]] && want=$(last_name)
+  for f in "$want" "$dir/$want" "$dir/$want.frag" "$dir/$want.glsl"; do
+    [[ -f $f ]] && { echo "$f"; return; }
+  done
+  die "no shader named '$1' in $dir"
+}
+
+# shown[name] = "YYYY-MM-DD HH:MM:SS" it was last shown, from the run log.
+declare -A shown=()
+load_shown() {
+  [[ -f $state/log ]] || return 0
+  local name when
+  while IFS=$'\t' read -r name when; do shown[$name]=$when; done < <(
+    sed -nE 's|^([0-9-]+ [0-9:]+) showing .*/([^/]+)\.[a-z]+ \(.*\)$|\2\t\1|p' "$state/log")
+}
+
+# Playlist, best first: never-shown shaders (shuffled), then the half of the
+# collection shown longest ago (shuffled), then the rest oldest-first as
+# fallbacks. A shader can't come back until about half the others have played.
+pick() {
+  load_shown
+  local f name unseen=() seen=() sorted=()
+  for f in "$dir"/*.frag "$dir"/*.glsl; do
+    name=$(name_of "$f")
+    if [[ -n ${shown[$name]:-} ]]; then seen+=("${shown[$name]}"$'\t'"$f"); else unseen+=("$f"); fi
+  done
+
+  if ((${#unseen[@]})); then printf '%s\n' "${unseen[@]}" | shuf; fi
+  if ((${#seen[@]})); then
+    mapfile -t sorted < <(printf '%s\n' "${seen[@]}" | sort | cut -f2-)
+    local half=$(((${#sorted[@]} + 1) / 2))
+    printf '%s\n' "${sorted[@]:0:half}" | shuf
+    if ((${#sorted[@]} > half)); then printf '%s\n' "${sorted[@]:half}"; fi
+  fi
+}
+
+# Commits changes to the collection when it lives in a git repo.
+commit() {
+  git -C "$dir" rev-parse --git-dir >/dev/null 2>&1 || return 0
+  git -C "$dir" add -A .
+  if ! git -C "$dir" diff --cached --quiet -- .; then
+    git -C "$dir" commit -q -m "$1" -- . && echo "Committed: $1"
+  fi
+}
+
+case "${1:-}" in
+add)
+  name=${2:-shader-$(date +%Y%m%d-%H%M%S)}
+  name=$(tr '[:upper:]' '[:lower:]' <<<"${name%.frag}" | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g')
+  [[ -n $name ]] || die "invalid name '$2'"
+  target="$dir/$name.frag"
+  [[ ! -e $target ]] || die "$target already exists"
+
+  tmp=$(mktemp --suffix=.frag)
+  trap 'rm -f "$tmp"' EXIT
+  if [[ -t 0 ]]; then wl-paste --no-newline >"$tmp"; else cat >"$tmp"; fi
+  [[ -s $tmp ]] || die "nothing to add (clipboard/stdin is empty)"
+
+  timeout 60 "$bin" --check "$tmp" >/dev/null
+  mkdir -p "$dir"
+  install -m 644 "$tmp" "$target"
+  echo "Added $name"
+  commit "Add shader $name"
+  ;;
+remove)
+  [[ -n ${2:-} ]] || usage
+  file=$(resolve "$2")
+  name=$(name_of "$file")
+  rm -- "$file"
+  echo "Removed $name"
+  commit "Remove shader $name"
+  ;;
+preview)
+  if [[ -n ${2:-} ]]; then target=$(resolve "$2"); else target=$dir; fi
+  exec "$bin" --shader "$target"
+  ;;
+check)
+  [[ -n ${2:-} ]] || usage
+  exec timeout 60 "$bin" --check "$2" ${3:+--thumb "$3"}
+  ;;
+last)
+  last_name
+  ;;
+history)
+  [[ -f $state/log ]] || die "no shader has been shown yet"
+  grep -h ' showing ' "$state/log" | tail -n "${2:-20}" | sed -E 's| showing .*/([^/]+)\.[a-z]+ \((.*) format\)$|  \1  (\2)|'
+  ;;
+list)
+  load_shown
+  for f in "$dir"/*.frag "$dir"/*.glsl; do
+    name=$(name_of "$f")
+    printf '%-24s %s\n' "$name" "${shown[$name]:-new}"
+  done
+  ;;
+pick)
+  pick
+  ;;
+*)
+  usage
+  ;;
+esac

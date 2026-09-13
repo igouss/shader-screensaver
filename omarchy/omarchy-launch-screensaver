@@ -1,0 +1,79 @@
+#!/bin/bash
+
+# Override of Omarchy's omarchy-launch-screensaver, found first through a PATH
+# line in ~/.bashrc. Runs the GLSL shader screensaver on every monitor: shaders
+# that were never shown go first, then a rotation that avoids recent repeats
+# (see `screensaver-shaders pick`). Falls back to the stock terminal screensaver
+# if the renderer isn't built.
+
+bin="$HOME/.local/bin/shader-screensaver"
+helper="$HOME/.local/bin/screensaver-shaders"
+shaders="${XDG_CONFIG_HOME:-$HOME/.config}/shader-screensaver/shaders"
+
+# Fraction of the window's pixel size the shader renders at (0.1-1). Lower = faster.
+scale=1.0
+
+if [[ ! -x $bin ]]; then
+  exec "${OMARCHY_PATH:-/usr/share/omarchy}/bin/omarchy-launch-screensaver" "$@"
+fi
+
+# Exit early if screensaver is already running
+pgrep -f '[o]rg.omarchy.screensaver' >/dev/null && exit 0
+
+# Allow screensaver to be turned off but also force started
+if omarchy-toggle-enabled screensaver-off && [[ $1 != "force" ]]; then
+  exit 1
+fi
+
+focused=$(omarchy-hyprland-monitor-focused)
+
+hypr_focus_monitor() {
+  hyprctl dispatch "hl.dsp.focus({ monitor = \"$1\" })" >/dev/null 2>&1 || hyprctl dispatch focusmonitor "$1" >/dev/null
+}
+
+hypr_exec() {
+  local command
+  printf -v command '%q ' "$@"
+
+  hyprctl dispatch "hl.dsp.exec_cmd([[$command]])" >/dev/null 2>&1 || hyprctl dispatch exec -- bash -lc "$command" >/dev/null
+}
+
+SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
+
+# Listen before spawning so a fast-mapping window can't beat us to the event.
+# Stop the listener on exit, otherwise it lingers and complains about a broken
+# pipe on the next Hyprland event.
+exec {events}< <(exec socat -U - "UNIX-CONNECT:$SOCKET" 2>/dev/null)
+events_pid=$!
+trap 'kill "$events_pid" 2>/dev/null' EXIT
+
+# New windows map on the focused monitor, so wait for each instance to open
+# before moving focus to the next monitor.
+wait_for_screensaver_window() {
+  local line deadline=$((SECONDS + 5))
+  while ((SECONDS < deadline)) && IFS= read -r -t $((deadline - SECONDS)) -u "$events" line; do
+    [[ $line == openwindow\>\>*,org.omarchy.screensaver,* ]] && return 0
+  done
+}
+
+# Playlist in priority order; the renderer shows the first one that compiles.
+args=()
+while IFS= read -r f; do args+=(--shader "$f"); done < <("$helper" pick 2>/dev/null)
+((${#args[@]})) || args=(--shader "$shaders")
+
+# One seed for all monitors so any random fallback matches too.
+seed=$(((RANDOM << 15) | RANDOM))
+log="${XDG_STATE_HOME:-$HOME/.local/state}/shader-screensaver/log"
+mkdir -p "${log%/*}"
+# The log doubles as the rotation history; keep its recent part when trimming.
+if (($(stat -c %s "$log" 2>/dev/null || echo 0) > 1048576)); then
+  tail -n 5000 "$log" >"$log.tmp" && mv "$log.tmp" "$log"
+fi
+
+for m in $(hyprctl monitors -j | jq -r '.[] | .name'); do
+  hypr_focus_monitor "$m"
+  hypr_exec "$bin" --app-id org.omarchy.screensaver --scale "$scale" --seed "$seed" --log "$log" "${args[@]}"
+  wait_for_screensaver_window
+done
+
+hypr_focus_monitor "$focused"
