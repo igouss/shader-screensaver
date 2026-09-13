@@ -37,5 +37,10 @@ line to add.
     screensaver-shaders remove last
     screensaver-shaders preview plasma      # any key exits
     screensaver-shaders list                # "new" = not shown yet
+    screensaver-shaders cycle               # every shader in turn: space pause, d delete,
+                                            # 1-9 seconds each (0 = 10), ←/→, q to quit
 
-Adding or removing a shader commits to this repo automatically.
+Adding or removing a shader commits to this repo automatically. While cycling, a
+notification names the shader on screen, and deletions are pushed when you quit.
+
+Settings live in `settings.conf`: `cycle_seconds` (default 3) and `render_scale`.

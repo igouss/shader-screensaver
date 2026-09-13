@@ -10,8 +10,10 @@ bin="$HOME/.local/bin/shader-screensaver"
 helper="$HOME/.local/bin/screensaver-shaders"
 shaders="${XDG_CONFIG_HOME:-$HOME/.config}/shader-screensaver/shaders"
 
-# Fraction of the window's pixel size the shader renders at (0.1-1). Lower = faster.
-scale=1.0
+# render_scale from settings.conf: fraction of the window's pixel size shaders render at.
+settings="$(dirname "$(readlink -f "$0")")/../settings.conf"
+scale=$(sed -nE 's/^[[:space:]]*render_scale[[:space:]]*=[[:space:]]*([^#[:space:]]+).*/\1/p' "$settings" 2>/dev/null | tail -n1)
+scale=${scale:-1.0}
 
 if [[ ! -x $bin ]]; then
   exec "${OMARCHY_PATH:-/usr/share/omarchy}/bin/omarchy-launch-screensaver" "$@"

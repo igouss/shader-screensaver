@@ -10,6 +10,8 @@
 // Exits on keyboard/mouse input, or when focus leaves the screensaver (e.g. the
 // session locks). --check compiles a shader offscreen and, with --thumb, renders
 // a PNG thumbnail with brightness/motion/cost stats without showing anything.
+// --cycle N steps through the playlist, N seconds per shader, driven by keys
+// instead of exiting on them, and reports each step on stdout.
 
 #define _GNU_SOURCE
 #include <GLES3/gl3.h>
@@ -20,6 +22,7 @@
 #include <limits.h>
 #include <math.h>
 #include <signal.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -580,11 +583,67 @@ static void close_all_screensavers(void) {
   closedir(proc);
 }
 
+__attribute__((format(printf, 1, 2))) static void log_line(const char *fmt, ...) {
+  char when[32];
+  time_t wall = time(NULL);
+  strftime(when, sizeof when, "%F %T", localtime(&wall));
+
+  va_list ap;
+  va_start(ap, fmt);
+  fprintf(stderr, "%s ", when);
+  vfprintf(stderr, fmt, ap);
+  fputc('\n', stderr);
+  va_end(ap);
+}
+
+// Opens the first shader that compiles, starting at `from` and moving by
+// `step` through the playlist (wrapping around). Files that fail are marked
+// gone so a cycle doesn't retry them. Returns 0 when nothing usable is left.
+static GLuint open_shader(char **files, bool *gone, int count, int from, int step, int *index, Format *fmt) {
+  for (int n = 0; n < count; n++) {
+    int i = ((from + step * n) % count + count) % count;
+    if (gone[i]) continue;
+    GLuint program = load_program(files[i], fmt);
+    if (program) {
+      *index = i;
+      return program;
+    }
+    gone[i] = true;
+  }
+  return 0;
+}
+
+// Records what's on screen: the run log (which drives the rotation and
+// `screensaver-shaders history`) and the "current" file.
+static void announce(const char *path, Format fmt) {
+  log_line("showing %s (%s format)", path, FORMAT_NAMES[fmt]);
+
+  char current_path[PATH_MAX];
+  state_path(current_path, sizeof current_path, "current");
+  FILE *current = fopen(current_path, "w");
+  if (current) {
+    fprintf(current, "%s\n", path);
+    fclose(current);
+  }
+}
+
+// Cycle mode tells the wrapper script what's on screen, as tab-separated lines.
+static void report_show(char **files, const bool *gone, int count, int index) {
+  int pos = 0, total = 0;
+  for (int i = 0; i < count; i++) {
+    if (gone[i]) continue;
+    total++;
+    if (i <= index) pos++;
+  }
+  printf("show\t%d\t%d\t%s\n", pos, total, files[index]);
+}
+
 static void usage(const char *argv0) {
   fprintf(stderr,
           "usage: %s [--shader FILE|DIR]... [--scale 0.1-1] [--seed N] [--app-id ID] [--log FILE] [--fps]\n"
+          "       %s --cycle SECONDS [--shader FILE|DIR]... [...]\n"
           "       %s --check FILE [--thumb OUT.png] [--time SECONDS]\n",
-          argv0, argv0);
+          argv0, argv0, argv0);
 }
 
 int main(int argc, char **argv) {
@@ -596,6 +655,7 @@ int main(int argc, char **argv) {
   float scale = 1.0f;
   unsigned seed = (unsigned)time(NULL) ^ ((unsigned)getpid() << 16);
   bool show_fps = false;
+  double cycle_seconds = 0.0;
 
   for (int i = 1; i < argc; i++) {
     if (!strcmp(argv[i], "--app-id") && i + 1 < argc) app_id = argv[++i];
@@ -608,6 +668,10 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--log") && i + 1 < argc) log_path = argv[++i];
     else if (!strcmp(argv[i], "--scale") && i + 1 < argc) scale = strtof(argv[++i], NULL);
     else if (!strcmp(argv[i], "--seed") && i + 1 < argc) seed = (unsigned)strtoul(argv[++i], NULL, 10);
+    else if (!strcmp(argv[i], "--cycle") && i + 1 < argc) {
+      cycle_seconds = strtod(argv[++i], NULL);
+      if (cycle_seconds < 0.5) cycle_seconds = 0.5;
+    }
     else if (!strcmp(argv[i], "--fps")) show_fps = true;
     else {
       usage(argv[0]);
@@ -685,27 +749,20 @@ int main(int argc, char **argv) {
     free(part);
   }
 
+  bool *gone = calloc(SDL_max(file_count, 1), sizeof(bool)); // deleted, or failed to compile
   Format fmt = FMT_TWIGL;
-  GLuint program = 0;
-  const char *chosen = NULL;
-  for (int i = 0; i < file_count && !program; i++)
-    if ((program = load_program(files[i], &fmt))) chosen = files[i];
+  int index = 0;
+  GLuint program = open_shader(files, gone, file_count, 0, 1, &index, &fmt);
   if (!program) {
     fprintf(stderr, "shader-screensaver: no usable shader found\n");
     return 1;
   }
+  announce(files[index], fmt);
 
-  char when[32];
-  time_t wall = time(NULL);
-  strftime(when, sizeof when, "%F %T", localtime(&wall));
-  fprintf(stderr, "%s showing %s (%s format)\n", when, chosen, FORMAT_NAMES[fmt]);
-
-  char current_path[PATH_MAX];
-  state_path(current_path, sizeof current_path, "current");
-  FILE *current = fopen(current_path, "w");
-  if (current) {
-    fprintf(current, "%s\n", chosen);
-    fclose(current);
+  bool cycle = cycle_seconds > 0.0;
+  if (cycle) {
+    setvbuf(stdout, NULL, _IOLBF, 0);
+    report_show(files, gone, file_count, index);
   }
 
   SDL_HideCursor();
@@ -733,6 +790,12 @@ int main(int argc, char **argv) {
   float target_scale = 0.0f;
 
   Uint64 start = SDL_GetTicksNS(), last = start, fps_mark = start, perf_mark = start, check_focus_at = 0;
+  const Uint64 session_start = start;
+  const float start_scale = scale;
+  // Cycle mode: when to advance, and what the keys asked for this frame.
+  Uint64 advance_at = start + (Uint64)(cycle_seconds * 1e9);
+  bool paused = false, delete_current = false;
+  int switch_step = 0;
   unsigned frame = 0;
   int frames = 0, perf_frames = 0;
   float motion = 0.0f;
@@ -750,16 +813,49 @@ int main(int argc, char **argv) {
         stop_reason = "window closed";
         break;
       case SDL_EVENT_KEY_DOWN:
-        if (armed && !ev.key.repeat) stop_reason = "key press";
+        if (ev.key.repeat) break;
+        if (!cycle) {
+          if (armed) stop_reason = "key press";
+          break;
+        }
+        switch (ev.key.key) {
+        case SDLK_ESCAPE:
+        case SDLK_Q:
+          stop_reason = "quit";
+          break;
+        case SDLK_SPACE:
+          paused = !paused;
+          advance_at = now + (Uint64)(cycle_seconds * 1e9);
+          printf("%s\t%s\n", paused ? "paused" : "resumed", files[index]);
+          break;
+        case SDLK_D:
+          delete_current = true;
+          break;
+        case SDLK_RIGHT:
+        case SDLK_N:
+          switch_step = 1;
+          break;
+        case SDLK_LEFT:
+        case SDLK_P:
+          switch_step = -1;
+          break;
+        default:
+          if (ev.key.key >= SDLK_0 && ev.key.key <= SDLK_9) {
+            cycle_seconds = ev.key.key == SDLK_0 ? 10.0 : (double)(ev.key.key - SDLK_0);
+            paused = false;
+            advance_at = now + (Uint64)(cycle_seconds * 1e9);
+            printf("interval\t%.0f\t%s\n", cycle_seconds, files[index]);
+          }
+        }
         break;
       case SDL_EVENT_MOUSE_BUTTON_DOWN:
       case SDL_EVENT_MOUSE_WHEEL:
       case SDL_EVENT_FINGER_DOWN:
-        if (armed) stop_reason = "click or scroll";
+        if (armed && !cycle) stop_reason = "click or scroll";
         break;
       case SDL_EVENT_MOUSE_MOTION:
         // Ignore jitter and the pointer settling right after the window maps.
-        if (elapsed > 1.5 && (motion += fabsf(ev.motion.xrel) + fabsf(ev.motion.yrel)) > 24.0f)
+        if (!cycle && elapsed > 1.5 && (motion += fabsf(ev.motion.xrel) + fabsf(ev.motion.yrel)) > 24.0f)
           stop_reason = "mouse moved";
         break;
       case SDL_EVENT_WINDOW_FOCUS_LOST:
@@ -777,6 +873,33 @@ int main(int argc, char **argv) {
       if (!screensaver_should_stay(app_id)) stop_reason = "focus left the screensaver or the session locked";
     }
     if (stop_reason) break;
+
+    if (cycle && !paused && !switch_step && !delete_current && now >= advance_at) switch_step = 1;
+    if (delete_current || switch_step) {
+      if (delete_current) {
+        printf("delete\t%s\n", files[index]);
+        gone[index] = true;
+        if (!switch_step) switch_step = 1;
+      }
+      glDeleteProgram(program);
+      program = open_shader(files, gone, file_count, index + switch_step, switch_step, &index, &fmt);
+      delete_current = false, switch_step = 0;
+      if (!program) {
+        stop_reason = "no shaders left";
+        break;
+      }
+      glUseProgram(program);
+      lookup_uniforms(program, uniforms);
+      announce(files[index], fmt);
+      report_show(files, gone, file_count, index);
+
+      // Each shader starts at time 0 with a fresh frame-rate budget.
+      start = last = perf_mark = now;
+      elapsed = 0.0;
+      frame = 0, perf_frames = 0;
+      scale = start_scale;
+      advance_at = now + (Uint64)(cycle_seconds * 1e9);
+    }
 
     int w, h;
     SDL_GetWindowSizeInPixels(win, &w, &h);
@@ -818,9 +941,7 @@ int main(int argc, char **argv) {
     }
   }
 
-  wall = time(NULL);
-  strftime(when, sizeof when, "%F %T", localtime(&wall));
-  fprintf(stderr, "%s stopped after %.0fs: %s\n", when, (SDL_GetTicksNS() - start) / 1e9, stop_reason);
+  log_line("stopped after %.0fs: %s", (SDL_GetTicksNS() - session_start) / 1e9, stop_reason);
 
   SDL_GL_DestroyContext(ctx);
   SDL_DestroyWindow(win);

@@ -10,7 +10,9 @@ shopt -s nullglob
 dir="${XDG_CONFIG_HOME:-$HOME/.config}/shader-screensaver/shaders"
 state="${XDG_STATE_HOME:-$HOME/.local/state}/shader-screensaver"
 bin="$HOME/.local/bin/shader-screensaver"
-words="$(dirname "$(readlink -f "$0")")/../names"
+repo="$(dirname "$(readlink -f "$0")")/.."
+words="$repo/names"
+settings="$repo/settings.conf"
 
 usage() {
   cat >&2 <<EOF
@@ -25,6 +27,8 @@ usage: screensaver-shaders <command>
   history [n]          when each of the last n (default 20) shaders was shown
   list                 the collection, with when each was last shown (or "new")
   pick                 the order the next screensaver run will try shaders in
+  cycle                show every shader in turn, cycle_seconds (settings.conf) each:
+                       space pause, d delete, 1-9 seconds (0 = 10), ←/→ previous/next, q quit
 EOF
   exit 1
 }
@@ -56,6 +60,13 @@ resolve() {
 
 taken() {
   [[ -e $dir/$1.frag || -e $dir/$1.glsl ]]
+}
+
+# A value from settings.conf, or $2 when it isn't set there.
+setting() {
+  local value
+  value=$(sed -nE "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*([^#[:space:]]+).*/\1/p" "$settings" 2>/dev/null | tail -n1)
+  echo "${value:-$2}"
 }
 
 # An unused adjective-noun name from the word lists in names/.
@@ -109,6 +120,15 @@ commit() {
   fi
 }
 
+# Deletes a shader file and commits the removal.
+remove_shader() {
+  local name
+  name=$(name_of "$1")
+  rm -- "$1"
+  echo "Removed $name"
+  commit "Remove shader $name"
+}
+
 case "${1:-}" in
 add)
   name=$(tr '[:upper:]' '[:lower:]' <<<"${2:-}" | sed -E 's/\.(frag|glsl)$//; s/[^a-z0-9]+/-/g; s/^-+|-+$//g')
@@ -135,10 +155,7 @@ add)
 remove)
   [[ -n ${2:-} ]] || usage
   file=$(resolve "$2")
-  name=$(name_of "$file")
-  rm -- "$file"
-  echo "Removed $name"
-  commit "Remove shader $name"
+  remove_shader "$file"
   ;;
 preview)
   if [[ -n ${2:-} ]]; then target=$(resolve "$2"); else target=$dir; fi
@@ -164,6 +181,49 @@ list)
   ;;
 pick)
   pick
+  ;;
+cycle)
+  seconds=$(setting cycle_seconds 3)
+  mapfile -t playlist < <(pick)
+  ((${#playlist[@]})) || die "the collection is empty"
+  args=()
+  for f in "${playlist[@]}"; do args+=(--shader "$f"); done
+  echo "Cycling ${#playlist[@]} shaders, ${seconds}s each."
+  echo "Keys: space pause/resume, d delete, 1-9 seconds per shader (0 = 10), ←/→ previous/next, q or Esc quit."
+
+  # One notification, updated in place, names what's on screen.
+  note=0
+  notify() {
+    note=$(omarchy-notification-send -p -r "$note" --app-name shader-screensaver "$1" "$2" 2>/dev/null || echo 0)
+  }
+
+  mkdir -p "$state"
+  deleted=0 deleted_note=""
+  while IFS=$'\t' read -r event a b c; do
+    case $event in
+    show)
+      echo "  $a/$b  $(name_of "$c")"
+      notify "$(name_of "$c")" "${deleted_note}$a of $b · space pause · d delete"
+      deleted_note=""
+      ;;
+    paused) notify "$(name_of "$a") — paused" "space resumes · d delete" ;;
+    resumed) notify "$(name_of "$a")" "resumed" ;;
+    interval) notify "$(name_of "$b")" "${a}s per shader" ;;
+    delete)
+      remove_shader "$a" >/dev/null
+      deleted=$((deleted + 1))
+      deleted_note="deleted $(name_of "$a") · "
+      echo "  deleted $(name_of "$a")"
+      ;;
+    esac
+  done < <("$bin" --cycle "$seconds" --scale "$(setting render_scale 1.0)" --log "$state/log" "${args[@]}")
+  if ! wait "$!"; then
+    echo "screensaver-shaders: the viewer failed; see $state/log" >&2
+  fi
+
+  if ((deleted)) && git -C "$dir" rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1; then
+    git -C "$dir" push -q && echo "Pushed $deleted deletion(s)"
+  fi
   ;;
 *)
   usage
