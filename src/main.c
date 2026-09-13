@@ -615,7 +615,10 @@ int main(int argc, char **argv) {
     }
   }
   if (!(scale >= 0.1f && scale <= 1.0f)) scale = 1.0f;
-  if (log_path && !freopen(log_path, "a", stderr)) perror("shader-screensaver: --log");
+  if (log_path) {
+    if (freopen(log_path, "a", stderr)) setvbuf(stderr, NULL, _IOLBF, 0); // files default to full buffering
+    else perror("shader-screensaver: --log");
+  }
 
   char default_dir[PATH_MAX];
   if (n_shader_args == 0) {
@@ -651,8 +654,10 @@ int main(int argc, char **argv) {
     SDL_WindowFlags flags = SDL_WINDOW_OPENGL | (check_path ? SDL_WINDOW_HIDDEN : SDL_WINDOW_FULLSCREEN | SDL_WINDOW_BORDERLESS);
     win = SDL_CreateWindow("Shader Screensaver", 1280, 720, flags);
     if (win) ctx = SDL_GL_CreateContext(win);
+    if (ctx && !check_path) SDL_GL_SetSwapInterval(1);
   }
 
+  fflush(stderr); // anything Mesa buffered goes to /dev/null too
   if (saved_stderr >= 0) dup2(saved_stderr, STDERR_FILENO), close(saved_stderr);
   if (devnull >= 0) close(devnull);
   if (!ctx) {
@@ -703,7 +708,6 @@ int main(int argc, char **argv) {
     fclose(current);
   }
 
-  SDL_GL_SetSwapInterval(1);
   SDL_HideCursor();
 
   glUseProgram(program);
@@ -732,9 +736,9 @@ int main(int argc, char **argv) {
   unsigned frame = 0;
   int frames = 0, perf_frames = 0;
   float motion = 0.0f;
-  bool running = true;
+  const char *stop_reason = NULL;
 
-  while (running) {
+  for (;;) {
     Uint64 now = SDL_GetTicksNS();
     double elapsed = (now - start) / 1e9;
 
@@ -743,19 +747,20 @@ int main(int argc, char **argv) {
       bool armed = elapsed > 0.5;
       switch (ev.type) {
       case SDL_EVENT_QUIT:
-        running = false;
+        stop_reason = "window closed";
         break;
       case SDL_EVENT_KEY_DOWN:
-        if (armed && !ev.key.repeat) running = false;
+        if (armed && !ev.key.repeat) stop_reason = "key press";
         break;
       case SDL_EVENT_MOUSE_BUTTON_DOWN:
       case SDL_EVENT_MOUSE_WHEEL:
       case SDL_EVENT_FINGER_DOWN:
-        if (armed) running = false;
+        if (armed) stop_reason = "click or scroll";
         break;
       case SDL_EVENT_MOUSE_MOTION:
         // Ignore jitter and the pointer settling right after the window maps.
-        if (elapsed > 1.5 && (motion += fabsf(ev.motion.xrel) + fabsf(ev.motion.yrel)) > 24.0f) running = false;
+        if (elapsed > 1.5 && (motion += fabsf(ev.motion.xrel) + fabsf(ev.motion.yrel)) > 24.0f)
+          stop_reason = "mouse moved";
         break;
       case SDL_EVENT_WINDOW_FOCUS_LOST:
         // Deferred: while launching on several monitors focus hops between
@@ -769,9 +774,9 @@ int main(int argc, char **argv) {
     }
     if (check_focus_at && now >= check_focus_at) {
       check_focus_at = 0;
-      if (!screensaver_should_stay(app_id)) running = false;
+      if (!screensaver_should_stay(app_id)) stop_reason = "focus left the screensaver or the session locked";
     }
-    if (!running) break;
+    if (stop_reason) break;
 
     int w, h;
     SDL_GetWindowSizeInPixels(win, &w, &h);
@@ -812,6 +817,10 @@ int main(int argc, char **argv) {
       frames = 0, fps_mark = now;
     }
   }
+
+  wall = time(NULL);
+  strftime(when, sizeof when, "%F %T", localtime(&wall));
+  fprintf(stderr, "%s stopped after %.0fs: %s\n", when, (SDL_GetTicksNS() - start) / 1e9, stop_reason);
 
   SDL_GL_DestroyContext(ctx);
   SDL_DestroyWindow(win);

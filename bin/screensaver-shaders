@@ -85,8 +85,11 @@ pick() {
 commit() {
   git -C "$dir" rev-parse --git-dir >/dev/null 2>&1 || return 0
   git -C "$dir" add -A .
-  if ! git -C "$dir" diff --cached --quiet -- .; then
-    git -C "$dir" commit -q -m "$1" -- . && echo "Committed: $1"
+  if git -C "$dir" diff --cached --quiet -- .; then return 0; fi
+  if git -C "$dir" commit -q -m "$1" -- .; then
+    echo "Committed: $1"
+  else
+    echo "screensaver-shaders: git commit failed; the change is saved but not committed" >&2
   fi
 }
 
