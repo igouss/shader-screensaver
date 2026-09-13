@@ -30,10 +30,6 @@ push: `git -C ~/Projects/shader-screensaver push`.
 Don't preview new shaders on the user's screen unless they ask: they are meant to be a
 surprise the next time the screensaver runs.
 
-`screensaver-shaders add` handles naming: if the name you pass is missing or already
-taken, it picks an unused random two-word name from the repo's `names/` word lists and
-prints it. Report the name it printed.
-
 ## Add a pasted shader
 
 1. Write the code verbatim to a file in your scratchpad, e.g. `incoming.frag`.
@@ -45,8 +41,8 @@ prints it. Report the name it printed.
    multi-pass buffers, audio, and WGSL/HLSL/"golf" sources aren't supported: say so
    rather than rewriting the shader.
 4. Invent a name: 1–3 lowercase words joined by `-`, evocative of what it shows
-   (`copper-nebula`, `folded-lattice`). If the source credits an author or URL, keep
-   that comment at the top.
+   (`copper-nebula`, `folded-lattice`), not already in `screensaver-shaders list`.
+   If the source credits an author or URL, keep that comment at the top.
 5. `screensaver-shaders add <name> < incoming.frag`, then push.
 6. Tell the user the name, a one-line description, and that it plays next.
 
@@ -66,9 +62,11 @@ place, "express yourself"), every shader in the batch interprets it through pale
 form, motion and composition, not just in its name.
 
 1. Read [shader-guide.md](shader-guide.md) first: formats, uniforms, the quality bar and
-   the technique menu. Check `screensaver-shaders list` so ideas don't repeat.
+   the technique menu. Check `screensaver-shaders list` so names and ideas don't repeat.
 2. Write each shader as original work in the scratchpad. Vary technique and format
-   across the batch, and start each file with the header comment from the guide.
+   across the batch, and start each file with the header comment from the guide. Give
+   each one a name: 1–3 lowercase words joined by `-`, evocative of what it shows, not
+   already in the collection.
 3. For each: `screensaver-shaders check <file> <file>.png` and compare the stats with
    the quality bar. Fix what fails (doesn't compile, too dark or bright, static or
    frantic, too slow). There is no separate thumbnail review.
