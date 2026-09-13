@@ -8,7 +8,8 @@ rotation avoids recent repeats.
   FragCoord GLSL and Shadertoy shaders, skips ones that don't compile, and lowers the
   render resolution for heavy ones.
 - `bin/screensaver-shaders` manages the collection: add from the clipboard, remove,
-  preview, check, last, history, list, pick.
+  preview, check, last, history, list, pick. A shader added without a name, or under
+  a name that's taken, gets a random two-word name from the word lists in `names/`.
 - `omarchy/omarchy-launch-screensaver` replaces Omarchy's launcher and keeps its window
   class, so idle and lock behaviour is unchanged.
 - `skill/` is a Claude Code skill (`/screensaver`) that adds pasted shaders, removes

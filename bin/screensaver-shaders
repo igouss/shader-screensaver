@@ -10,11 +10,13 @@ shopt -s nullglob
 dir="${XDG_CONFIG_HOME:-$HOME/.config}/shader-screensaver/shaders"
 state="${XDG_STATE_HOME:-$HOME/.local/state}/shader-screensaver"
 bin="$HOME/.local/bin/shader-screensaver"
+words="$(dirname "$(readlink -f "$0")")/../names"
 
 usage() {
   cat >&2 <<EOF
 usage: screensaver-shaders <command>
-  add [name]           save a shader from stdin, or from the clipboard when stdin is a terminal
+  add [name]           save a shader from stdin, or from the clipboard when stdin is a terminal;
+                       a missing or taken name is replaced by a random two-word one
   remove <name|last>   delete a shader (last = the one shown most recently)
   preview [name|last]  show a shader fullscreen now (random when no name); any key exits
   check <file> [png]   compile a shader offscreen; with png, also render a thumbnail
@@ -52,7 +54,21 @@ resolve() {
   die "no shader named '$1' in $dir"
 }
 
-# shown[name] = "YYYY-MM-DD HH:MM:SS" it was last shown, from the run log.
+taken() {
+  [[ -e $dir/$1.frag || -e $dir/$1.glsl ]]
+}
+
+# An unused adjective-noun name from the word lists in names/.
+random_name() {
+  local name i
+  for ((i = 0; i < 200; i++)); do
+    name=$(shuf -n1 "$words/adjectives")-$(shuf -n1 "$words/nouns")
+    taken "$name" || { echo "$name"; return; }
+  done
+  die "no unused random name found in $words"
+}
+
+# shown[name] ="YYYY-MM-DD HH:MM:SS" it was last shown, from the run log.
 declare -A shown=()
 load_shown() {
   [[ -f $state/log ]] || return 0
@@ -95,11 +111,15 @@ commit() {
 
 case "${1:-}" in
 add)
-  name=${2:-shader-$(date +%Y%m%d-%H%M%S)}
-  name=$(tr '[:upper:]' '[:lower:]' <<<"${name%.frag}" | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g')
-  [[ -n $name ]] || die "invalid name '$2'"
+  name=$(tr '[:upper:]' '[:lower:]' <<<"${2:-}" | sed -E 's/\.(frag|glsl)$//; s/[^a-z0-9]+/-/g; s/^-+|-+$//g')
+  if [[ -z $name ]]; then
+    name=$(random_name)
+  elif taken "$name"; then
+    new=$(random_name)
+    echo "'$name' is taken; using '$new'"
+    name=$new
+  fi
   target="$dir/$name.frag"
-  [[ ! -e $target ]] || die "$target already exists"
 
   tmp=$(mktemp --suffix=.frag)
   trap 'rm -f "$tmp"' EXIT
