@@ -10,10 +10,17 @@ bin="$HOME/.local/bin/shader-screensaver"
 helper="$HOME/.local/bin/screensaver-shaders"
 shaders="${XDG_CONFIG_HOME:-$HOME/.config}/shader-screensaver/shaders"
 
-# render_scale from settings.conf: fraction of the window's pixel size shaders render at.
 settings="$(dirname "$(readlink -f "$0")")/../settings.conf"
-scale=$(sed -nE 's/^[[:space:]]*render_scale[[:space:]]*=[[:space:]]*([^#[:space:]]+).*/\1/p' "$settings" 2>/dev/null | tail -n1)
-scale=${scale:-1.0}
+
+# A value from settings.conf, or $2 when it isn't set there.
+setting() {
+  local value
+  value=$(sed -nE "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*([^#[:space:]]+).*/\1/p" "$settings" 2>/dev/null | tail -n1)
+  echo "${value:-$2}"
+}
+
+scale=$(setting render_scale 1.0)
+max_fps=$(setting max_fps 0)
 
 if [[ ! -x $bin ]]; then
   exec "${OMARCHY_PATH:-/usr/share/omarchy}/bin/omarchy-launch-screensaver" "$@"
@@ -74,7 +81,7 @@ fi
 
 for m in $(hyprctl monitors -j | jq -r '.[] | .name'); do
   hypr_focus_monitor "$m"
-  hypr_exec "$bin" --app-id org.omarchy.screensaver --scale "$scale" --seed "$seed" --log "$log" "${args[@]}"
+  hypr_exec "$bin" --app-id org.omarchy.screensaver --scale "$scale" --max-fps "$max_fps" --seed "$seed" --log "$log" "${args[@]}"
   wait_for_screensaver_window
 done
 

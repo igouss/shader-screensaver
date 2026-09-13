@@ -640,7 +640,7 @@ static void report_show(char **files, const bool *gone, int count, int index) {
 
 static void usage(const char *argv0) {
   fprintf(stderr,
-          "usage: %s [--shader FILE|DIR]... [--scale 0.1-1] [--seed N] [--app-id ID] [--log FILE] [--fps]\n"
+          "usage: %s [--shader FILE|DIR]... [--scale 0.1-1] [--max-fps N] [--seed N] [--app-id ID] [--log FILE] [--fps]\n"
           "       %s --cycle SECONDS [--shader FILE|DIR]... [...]\n"
           "       %s --check FILE [--thumb OUT.png] [--time SECONDS]\n",
           argv0, argv0, argv0);
@@ -655,7 +655,7 @@ int main(int argc, char **argv) {
   float scale = 1.0f;
   unsigned seed = (unsigned)time(NULL) ^ ((unsigned)getpid() << 16);
   bool show_fps = false;
-  double cycle_seconds = 0.0;
+  double cycle_seconds = 0.0, max_fps = 0.0;
 
   for (int i = 1; i < argc; i++) {
     if (!strcmp(argv[i], "--app-id") && i + 1 < argc) app_id = argv[++i];
@@ -672,6 +672,7 @@ int main(int argc, char **argv) {
       cycle_seconds = strtod(argv[++i], NULL);
       if (cycle_seconds < 0.5) cycle_seconds = 0.5;
     }
+    else if (!strcmp(argv[i], "--max-fps") && i + 1 < argc) max_fps = strtod(argv[++i], NULL);
     else if (!strcmp(argv[i], "--fps")) show_fps = true;
     else {
       usage(argv[0]);
@@ -777,8 +778,12 @@ int main(int argc, char **argv) {
 
   const SDL_DisplayMode *mode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(win));
   float refresh = mode && mode->refresh_rate > 0 ? mode->refresh_rate : 60.0f;
+  // Frames beyond max_fps are held back; vsync alone covers displays that
+  // aren't faster than the cap.
+  bool limit_fps = max_fps > 0.0 && max_fps < refresh - 0.5;
+  double frame_rate = limit_fps ? max_fps : refresh;
   // Below this frame rate the render resolution drops (heavy shaders).
-  double min_fps = SDL_min(20.0, refresh * 0.66);
+  double min_fps = SDL_min(20.0, frame_rate * 0.66);
 
   Values values;
   init_values(values, refresh);
@@ -920,6 +925,10 @@ int main(int argc, char **argv) {
       glBlitFramebuffer(0, 0, rw, rh, 0, 0, pw, ph, GL_COLOR_BUFFER_BIT, GL_LINEAR);
     }
     SDL_GL_SwapWindow(win);
+    if (limit_fps) {
+      Uint64 frame_ns = (Uint64)(1e9 / max_fps), spent = SDL_GetTicksNS() - now;
+      if (spent < frame_ns) SDL_DelayPrecise(frame_ns - spent);
+    }
     frame++, frames++, perf_frames++;
 
     // Measure over 2s windows after a 1s warm-up; shrink the render target

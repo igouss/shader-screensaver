@@ -43,4 +43,5 @@ line to add.
 Adding or removing a shader commits to this repo automatically. While cycling, a
 notification names the shader on screen, and deletions are pushed when you quit.
 
-Settings live in `settings.conf`: `cycle_seconds` (default 3) and `render_scale`.
+Settings live in `settings.conf`: `cycle_seconds` (default 3), `render_scale` and
+`max_fps` (60).

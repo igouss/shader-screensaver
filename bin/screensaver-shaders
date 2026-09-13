@@ -216,7 +216,8 @@ cycle)
       echo "  deleted $(name_of "$a")"
       ;;
     esac
-  done < <("$bin" --cycle "$seconds" --scale "$(setting render_scale 1.0)" --log "$state/log" "${args[@]}")
+  done < <("$bin" --cycle "$seconds" --scale "$(setting render_scale 1.0)" --max-fps "$(setting max_fps 0)" \
+    --log "$state/log" "${args[@]}")
   if ! wait "$!"; then
     echo "screensaver-shaders: the viewer failed; see $state/log" >&2
   fi
