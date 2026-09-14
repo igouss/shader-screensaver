@@ -1,0 +1,1 @@
+float T=754./60.;for(float i=0.,h=0.,s=0.,v=0.;i++<70.;){s=3.+i*4.;v=floor((2.+sin(i))*1./i*s*T)/T;vec2 p=(FC.xy/r.x)*s+vec2(sin(t+i),t*v);h=fract(sin(dot(floor(p),floor(p)+i))*4e3);if(h<.02)o+=smoothstep(.2,0.,length(fract(p)-.5+(h-.5)*.7));}o+=vec4(0,.25,.5,1)*(1.-FC.y/r.y);
