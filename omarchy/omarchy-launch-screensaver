@@ -1,23 +1,14 @@
 #!/bin/bash
 
 # Override of Omarchy's omarchy-launch-screensaver, found first through a PATH
-# line in ~/.bashrc. Runs a screensaver on every monitor, as `mode` in
-# settings.conf says:
-#
-# - shaders: the GLSL shader screensaver. Shaders that were never shown go
-#   first, then a rotation that avoids recent repeats (see
-#   `screensaver-shaders pick`). Falls back to the stock terminal screensaver
-#   if the renderer isn't built.
-# - commits: commit-screensaver (~/Projects/commit-screensaver) replaying
-#   random Git commits in a fullscreen foot window. Falls back to shaders if
-#   it or foot isn't installed.
-# - mixed: one of the two, picked at random each time.
+# line in ~/.bashrc. Runs the GLSL shader screensaver on every monitor: shaders
+# that were never shown go first, then a rotation that avoids recent repeats
+# (see `screensaver-shaders pick`). Falls back to the stock terminal screensaver
+# if the renderer isn't built.
 
 bin="$HOME/.local/bin/shader-screensaver"
 helper="$HOME/.local/bin/screensaver-shaders"
 shaders="${XDG_CONFIG_HOME:-$HOME/.config}/shader-screensaver/shaders"
-commits_bin="$HOME/.local/bin/commit-screensaver"
-foot_config="${OMARCHY_PATH:-/usr/share/omarchy}/default/foot/screensaver.ini"
 
 settings="$(dirname "$(readlink -f "$0")")/../settings.conf"
 
@@ -30,17 +21,8 @@ setting() {
 
 scale=$(setting render_scale 1.0)
 max_fps=$(setting max_fps 0)
-mode=$(setting mode shaders)
 
-if [[ $mode == mixed ]]; then
-  modes=(shaders commits)
-  mode=${modes[RANDOM % 2]}
-fi
-if [[ $mode == commits ]] && ! { [[ -x $commits_bin ]] && command -v foot >/dev/null; }; then
-  mode=shaders
-fi
-
-if [[ $mode == shaders && ! -x $bin ]]; then
+if [[ ! -x $bin ]]; then
   exec "${OMARCHY_PATH:-/usr/share/omarchy}/bin/omarchy-launch-screensaver" "$@"
 fi
 
@@ -99,11 +81,7 @@ fi
 
 for m in $(hyprctl monitors -j | jq -r '.[] | .name'); do
   hypr_focus_monitor "$m"
-  if [[ $mode == commits ]]; then
-    hypr_exec foot --app-id=org.omarchy.screensaver --config="$foot_config" "$commits_bin" --app-id org.omarchy.screensaver
-  else
-    hypr_exec "$bin" --app-id org.omarchy.screensaver --scale "$scale" --max-fps "$max_fps" --seed "$seed" --log "$log" "${args[@]}"
-  fi
+  hypr_exec "$bin" --app-id org.omarchy.screensaver --scale "$scale" --max-fps "$max_fps" --seed "$seed" --log "$log" "${args[@]}"
   wait_for_screensaver_window
 done
 

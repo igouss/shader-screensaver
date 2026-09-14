@@ -13,10 +13,7 @@ rotation avoids recent repeats.
   preview, check, last, history, list, pick. A shader added without a name, or under
   a name that's taken, gets a random two-word name from the word lists in `names/`.
 - `omarchy/omarchy-launch-screensaver` replaces Omarchy's launcher and keeps its window
-  class, so idle and lock behaviour is unchanged. Depending on `mode` in
-  `settings.conf` it runs the shaders, [commit-screensaver](https://github.com/igouss/commit-screensaver)
-  (random Git commits replayed with gitlogue, in a fullscreen foot window), or one of
-  the two at random.
+  class, so idle and lock behaviour is unchanged.
 - `skill/` is a Claude Code skill (`/screensaver`) that adds pasted shaders, removes
   them and writes new ones.
 - `shaders/` is the collection.
@@ -49,8 +46,8 @@ line to add.
 Adding or removing a shader commits to this repo automatically. While cycling, a
 notification names the shader on screen, and deletions are pushed when you quit.
 
-Settings live in `settings.conf`: `mode` (`shaders`, `commits` or `mixed`; default
-`shaders`), `cycle_seconds` (default 3), `render_scale` and `max_fps`.
+Settings live in `settings.conf`: `cycle_seconds` (default 3), `render_scale` and
+`max_fps`.
 
 ## Develop
 
