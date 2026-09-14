@@ -1,0 +1,1 @@
+mat3 R=rotate3D(sin(t*.5)*.01-.5,vec3(1,8,-.2));for(float i=0.,g=0.,e=0.,s=0.;++i<51.;o.rgb+=(.01-hsv(.1,g*.05-e,s/3e2))*1.96){vec3 p=vec3((FC.xy-.5*r)/r.y*7.+vec2(-17,2.2),g)*R;s=2.;for(int i=0;i++<18;p=vec3(.05,4,-1)-abs(abs(p)*e-vec3(3,4,3)))s*=e=7.4/dot(p,p*.51);g+=p.y/s*1.96;s=log(s)/exp(e);}
