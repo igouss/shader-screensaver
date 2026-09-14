@@ -1,0 +1,1 @@
+vec2 p=(FC.xy-r*.5)/r.y*mat2(8,-6,6,8),v;for(float i,f=3.+snoise2D(p+vec2(t*7.,0));i++<50.;o+=(cos(sin(i)*vec4(1,2,3,1))+1.)*exp(sin(i*i+t))/length(max(v,vec2(v.x*f*.02,v.y))))v=p+cos(i*i+(t+p.x*.1)*.03+i*vec2(11,9))*5.;o=tanh(pow(o/1e2,vec4(1.5)));
