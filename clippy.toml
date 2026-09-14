@@ -1,0 +1,6 @@
+# Tests may unwrap: a panic is how they fail.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+
+# Names, not code, in doc comments.
+doc-valid-idents = ["FragCoord", ".."]

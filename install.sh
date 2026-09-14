@@ -28,7 +28,10 @@ link() {
   echo "linked $path -> $target"
 }
 
-"$repo/src/build.sh"
+cargo build --release --locked --manifest-path "$repo/Cargo.toml"
+# install(1) replaces the file rather than rewriting it, so a running
+# screensaver keeps its copy.
+install -Dm755 "$repo/target/release/shader-screensaver" "$HOME/.local/bin/shader-screensaver"
 echo "built ~/.local/bin/shader-screensaver"
 
 link "$repo/bin/screensaver-shaders" "$HOME/.local/bin/screensaver-shaders"

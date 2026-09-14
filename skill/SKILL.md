@@ -21,7 +21,7 @@ of the collection shown longest ago, so nothing comes back soon after it played.
 | Repo (private, GitHub `igouss/shader-screensaver`) | `~/Projects/shader-screensaver` |
 | Collection | `shaders/*.frag` in the repo (linked as `~/.config/shader-screensaver/shaders`) |
 | Helper | `screensaver-shaders` (run with no arguments for usage) |
-| Renderer | `~/.local/bin/shader-screensaver`; source `src/main.c`, rebuild with `src/build.sh` |
+| Renderer | `~/.local/bin/shader-screensaver`; Rust source in `src/` (preludes in `resources/glsl/`), rebuild with `./install.sh` |
 | Run log / history | `~/.local/state/shader-screensaver/log` |
 
 `screensaver-shaders add` and `remove` commit to the repo themselves. After a change,

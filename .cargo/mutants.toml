@@ -1,0 +1,16 @@
+# cargo mutants: mutation testing of everything unit tests can reach.
+#
+# Left out is code that only does something with a live display, GPU or
+# session: main.rs wiring, the GL and SDL adapters, stderr redirection, and
+# signalling sibling processes (which a test must never do). The GPU-backed
+# integration tests in tests/cli.rs cover those by running the binary.
+exclude_globs = [
+    "src/main.rs",
+    "src/adapters/gl.rs",
+    "src/adapters/sdl.rs",
+    "src/adapters/siblings.rs",
+    "src/adapters/stdio.rs",
+]
+
+# Asks the real Hyprland session; tests cover the parsing it relies on.
+exclude_re = ["impl Presence for Hyprland"]
