@@ -84,8 +84,10 @@ struct Cli {
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
-    // Twigl snippets rely on uninitialized locals being zero; ask Mesa to
-    // guarantee it.
+    // Pasted code relies on uninitialized locals being zero, as in WebGL.
+    // Twigl code gets explicit zeros where each variable is declared (see
+    // source.rs); for the other formats, ask Mesa, which zeroes a local once
+    // on entry to its function rather than every time its declaration runs.
     if env::var_os("glsl_zero_init").is_none() {
         // SAFETY: no other threads exist yet.
         unsafe { env::set_var("glsl_zero_init", "true") };

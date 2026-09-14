@@ -9,7 +9,7 @@ from the source:
 |---|---|---|---|
 | FragCoord GLSL | a `void main()` | `void main()` that writes `fragColor` | `u_resolution` (vec2, pixels), `u_time`, `u_time_delta`, `u_frame` (int), `u_mouse` (vec4), `u_date` (year, month 0–11, day, seconds), `u_refresh_rate` |
 | Shadertoy | a `mainImage(out vec4, in vec2)` | `mainImage` | `iResolution` (vec3), `iTime`, `iTimeDelta`, `iFrame`, `iMouse`, `iDate`, `iFrameRate`; `main()` is added |
-| twigl geekest | neither | only the body of `main()` | `FC` (= `gl_FragCoord`), `r` (resolution), `t` (time), `f` (frame), `m` (mouse, 0–1), output `o` (starts at 0), `rotate2D(a)`, `rotate3D(a, axis)`, `hsv(h, s, v)`; uninitialized locals are zero |
+| twigl geekest | neither | only the body of `main()` | `FC` (= `gl_FragCoord`), `r` (resolution), `t` (time), `f` (frame), `m` (mouse, 0–1), output `o` (starts at 0), `rotate2D(a)`, `rotate3D(a, axis)`, `hsv(h, s, v)`, twigl's noise `fsnoise(vec2)` (hash, 0–1), `snoise2D`/`snoise3D`/`snoise4D` (simplex, −1–1), `PI`, `PI2`, and `s` (sound level, always 0); uninitialized locals are zero every time their declaration runs |
 
 Prefer FragCoord GLSL for new work because it reads best; use twigl for compact,
 golf-style pieces.
@@ -34,8 +34,11 @@ golf-style pieces.
 - **No flashing or strobing:** no large areas changing brightness faster than about
   3 times a second, for photosensitivity.
 - **Cost:** at most ~8 ms/frame at 1920x1080 (the GPU is an AMD Radeon HD 7970). The
-  renderer lowers the resolution of slow shaders, but smooth is better, so cap raymarch
-  steps (~64–100) and keep inner loops small.
+  screen is 2560x1440, about 1.8× the pixels the check times, and the cap is 30 fps
+  (33 ms a frame), so ~9 ms is the most that still leaves headroom. The renderer lowers
+  the resolution of slow shaders, but smooth is better: cap raymarch steps (~64–100),
+  keep inner loops small, and build anything that only changes per frame (rotation
+  matrices) before the loops, because the compiler won't hoist it.
 - **Any aspect ratio:** normalize by height, `(FC.xy - 0.5*res) / res.y`, and keep the
   subject centred or the pattern full-bleed.
 - **Long runs:** time starts at 0 when the screensaver starts and may run for hours.
