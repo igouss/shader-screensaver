@@ -1,1 +1,7 @@
-vec3 p=vec3(0);float D=0.,e=0.,i=0.,b=0.,R=0.,S,C;for(p.z=5.;i++<3e2;mod(i,20.)==s?o+=.1/exp(e*1e3),p-=(.5-FC.rgb/r.y)*e++:p){R=fsnoise(p.xy*i)*2.-1.;R=b+R*R*R*PI;S=sin(R);C=cos(R);D=length(p-vec3(S+4.*S*C,C-2.*(C*C-S*S),S*(4.*S*S-3.)))-sin(R*36.+t*9.)*.1;--D<e?e=D,b=R:e;}
+vec3 d=.5-FC.rgb/r.y,p=vec3(0,0,5);o+=.1;
+if(25.-25.*d.z*d.z/dot(d,d)<17.3){
+float e=1.,b=0.,i=36.,D,R,S,C,h,u;
+for(int k=1;k<16;k++){u=fsnoise(p.xy+float(k)*1.37);
+for(int j=0;j<20;j++){i++;u=fract(u+.618034);R=u*2.-1.;R=b+R*R*R*PI;S=sin(R);C=cos(R);D=length(p-vec3(S+4.*S*C,C-2.*(C*C-S*S),S*(4.*S*S-3.)))-sin(R*36.+t*9.)*.1-1.;if(D<e){e=D;b=R;}}
+o+=.1/exp(e*1e3);p-=d*e++;
+if(o.r>=1.||p.z<-2.2)break;}}
