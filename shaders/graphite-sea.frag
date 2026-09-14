@@ -1,0 +1,1 @@
+float e=0.,i=0.,j=0.,f=0.,a=0.,w=0.;vec2 n=vec2(1)*rotate2D(1.9),m;mat2 R=rotate2D(1.);for(vec3 p=vec3(0),q=vec3(0);i++<40.;p=q+=vec3((FC.xy-.5*r)/r.y,-.5)*e){p.yz*=rotate2D(.7);f=.4;i<35.?p:p-=.001;e=p.y+7.;m=n;for(a=j=.9;j++<18.;a*=.8){float x=dot(p.xz,m)*f+t+t;w=exp(sin(x)-1.);p.xz-=m*w*cos(x)*a;e-=w*a;f*=1.2;m*=R;}}o-=e*2e3;
