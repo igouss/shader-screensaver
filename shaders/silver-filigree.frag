@@ -1,1 +1,1 @@
-for(float i=0.,e=0.,g=0.;i++<1e2;){vec3 p=vec3((FC.xy-r*.5)/r.y*g,g-4.3);p.zy*=rotate2D(t*.2);for(int j=0;j++<7;)p*=rotate3D(1.57,vec3(1,1.5*smoothstep(-1.,1.,sin(t*.4))-.5,0)),p=abs(p+p)-2.;g+=e=(length(vec2(length(p.xz)-2.,(p.y-p.x)*.7))-.6)/8e2;o+=exp(-e*2e3)/4e1;}
+mat2 A=rotate2D(t*.2);mat3 B=rotate3D(1.57,vec3(1,1.5*smoothstep(-1.,1.,sin(t*.4))-.5,0));for(float i=0.,e=0.,g=0.;i++<1e2;){vec3 p=vec3((FC.xy-r*.5)/r.y*g,g-4.3);p.zy*=A;for(int j=0;j++<7;)p*=B,p=abs(p+p)-2.;g+=e=(length(vec2(length(p.xz)-2.,(p.y-p.x)*.7))-.6)/8e2;o+=exp(-e*2e3)/4e1;}

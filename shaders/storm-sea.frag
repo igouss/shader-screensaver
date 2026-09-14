@@ -1,1 +1,1 @@
-float e,i,a,w,x,g;for(;i++<1e2;){vec3 p=vec3((FC.xy-.5*r)/r.y*g,g-3.);p.zy*=rotate2D(.6);i<1e2?p:p+=1e-4;e=p.y;for(a=.8;a>.003;a*=.8)p.xz*=rotate2D(5.),x=(++p.x+p.z)/a+t+t,w=exp(sin(x)-2.5)*a,o.gb+=w/4e2,p.xz-=w*cos(x),e-=w;g+=e;}o+=min(e*e*4e6,1./g)+g*g/2e2;
+float e,i,a,w,x,g,k;mat2 R=rotate2D(5.);for(;i++<24.;){vec3 p=vec3((FC.xy-.5*r)/r.y*g,g-3.);p.zy*=rotate2D(.6);i<24.?p:p+=1e-4;e=p.y;for(a=.8,k=1.25;a>.02;a*=.8,k*=1.25)p.xz*=R,x=(++p.x+p.z)*k+t+t,w=exp(sin(x)-2.5)*a,o.gb+=w/96.,p.xz-=w*cos(x),e-=w;g+=e;}o+=min(e*e*4e6,1./g)+g*g/2e2;
