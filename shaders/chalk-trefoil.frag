@@ -1,0 +1,1 @@
+vec3 p=vec3(0);float D=0.,e=0.,i=0.,b=0.,R=0.,S,C;for(p.z=5.;i++<3e2;mod(i,20.)==s?o+=.1/exp(e*1e3),p-=(.5-FC.rgb/r.y)*e++:p){R=fsnoise(p.xy*i)*2.-1.;R=b+R*R*R*PI;S=sin(R);C=cos(R);D=length(p-vec3(S+4.*S*C,C-2.*(C*C-S*S),S*(4.*S*S-3.)))-sin(R*36.+t*9.)*.1;--D<e?e=D,b=R:e;}
