@@ -4,6 +4,7 @@
 pub mod controls;
 pub mod pacing;
 pub mod playlist;
+pub mod qt;
 pub mod source;
 pub mod stats;
 pub mod uniforms;

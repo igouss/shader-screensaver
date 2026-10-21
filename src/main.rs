@@ -7,10 +7,11 @@
 //! the session locks). --cycle N steps through the playlist, N seconds per
 //! shader, driven by keys instead, and reports each step on stdout. --check
 //! compiles a shader offscreen and, with --thumb, renders a PNG thumbnail and
-//! reports brightness, motion and cost.
+//! reports brightness, motion and cost. --qt prints a shader rewritten for
+//! a Qt `ShaderEffect`, which the lock screen draws.
 
 use std::{
-    env,
+    env, fs,
     ops::ControlFlow,
     path::{Path, PathBuf},
     process::ExitCode,
@@ -31,6 +32,7 @@ use shader_screensaver::{
         self, check,
         screensaver::{Options, Screensaver},
     },
+    domain::{qt::qt_source, source::Fragment},
 };
 
 #[derive(Debug, Parser)]
@@ -72,6 +74,10 @@ struct Cli {
     #[arg(long, value_name = "FILE")]
     check: Option<PathBuf>,
 
+    /// Print FILE rewritten for a Qt `ShaderEffect` (compile it with qsb), then exit
+    #[arg(long, value_name = "FILE", conflicts_with_all = ["check", "cycle"])]
+    qt: Option<PathBuf>,
+
     /// With --check: also render a PNG thumbnail and report brightness, motion and cost
     #[arg(long, value_name = "OUT.png", requires = "check")]
     thumb: Option<PathBuf>,
@@ -98,14 +104,23 @@ fn main() -> ExitCode {
         eprintln!("shader-screensaver: --log: {e}");
     }
 
-    let result = match &cli.check {
-        Some(path) => run_check(path, cli.thumb.as_deref(), cli.time),
-        None => run_screensaver(cli),
+    let result = match (&cli.qt, &cli.check) {
+        (Some(path), _) => run_qt(path),
+        (None, Some(path)) => run_check(path, cli.thumb.as_deref(), cli.time),
+        (None, None) => run_screensaver(cli),
     };
     result.unwrap_or_else(|e| {
         eprintln!("shader-screensaver: {e}");
         ExitCode::FAILURE
     })
+}
+
+fn run_qt(path: &Path) -> Result<ExitCode, String> {
+    let code = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let source =
+        qt_source(&Fragment::new(&code).source).map_err(|e| format!("{}: {e}", path.display()))?;
+    print!("{source}");
+    Ok(ExitCode::SUCCESS)
 }
 
 fn open_screen(app_id: &str, visibility: Visibility) -> Result<SdlScreen, String> {

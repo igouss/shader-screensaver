@@ -13,6 +13,8 @@ bin="$HOME/.local/bin/shader-screensaver"
 repo="$(dirname "$(readlink -f "$0")")/.."
 words="$repo/names"
 settings="$repo/settings.conf"
+qt_cache="${XDG_CACHE_HOME:-$HOME/.cache}/shader-screensaver/qt"
+qsb=/usr/lib/qt6/bin/qsb
 
 usage() {
   cat >&2 <<EOF
@@ -27,6 +29,10 @@ usage: screensaver-shaders <command>
   history [n]          when each of the last n (default 20) shaders was shown
   list                 the collection, with when each was last shown (or "new")
   pick                 the order the next screensaver run will try shaders in
+  qt                   compile the collection for the lock screen (Qt ShaderEffect .qsb
+                       files in ~/.cache/shader-screensaver/qt); only changed shaders rebuild
+  lock                 the compiled shader the lock screen shows next (logged as shown),
+                       with its lock_* settings, tab-separated
   cycle                show every shader in turn, cycle_seconds (settings.conf) each:
                        space pause, d delete, 1-9 seconds (0 = 10), ←/→ previous/next, q quit
 EOF
@@ -108,6 +114,37 @@ pick() {
   fi
 }
 
+# Brings the lock screen's compiled copies up to date: rebuilds the ones older
+# than their shader, drops the ones whose shader is gone. A shader that can't
+# run in a ShaderEffect gets an empty .qsb, so it isn't retried until it changes.
+build_qt() {
+  [[ -x $qsb ]] || die "$qsb is missing (pacman -S qt6-shadertools)"
+  mkdir -p "$qt_cache"
+  local f name out tmp failed=0 built=0
+  for f in "$dir"/*.frag "$dir"/*.glsl; do
+    name=$(name_of "$f")
+    out="$qt_cache/$name.qsb"
+    [[ -e $out && $out -nt $f && $out -nt $bin ]] && continue
+    tmp=$(mktemp "$qt_cache/.$name.XXXXXX")
+    if "$bin" --qt "$f" >"$tmp.frag" 2>"$tmp.err" &&
+      "$qsb" --glsl "300 es,330" -o "$tmp" "$tmp.frag" >>"$tmp.err" 2>&1; then
+      mv "$tmp" "$out"
+      built=$((built + 1))
+    else
+      echo "screensaver-shaders: $name can't run on the lock screen: $(grep -m1 -i error "$tmp.err")" >&2
+      : >"$out"
+      rm -f "$tmp"
+      failed=$((failed + 1))
+    fi
+    rm -f "$tmp.frag" "$tmp.err"
+  done
+  for out in "$qt_cache"/*.qsb; do
+    name=$(name_of "$out")
+    [[ -e $dir/$name.frag || -e $dir/$name.glsl ]] || rm -f "$out"
+  done
+  ((built + failed == 0)) || echo "Compiled $built shader(s) for the lock screen; $failed can't run there." >&2
+}
+
 # Commits changes to the collection when it lives in a git repo.
 commit() {
   git -C "$dir" rev-parse --git-dir >/dev/null 2>&1 || return 0
@@ -181,6 +218,25 @@ list)
   ;;
 pick)
   pick
+  ;;
+qt)
+  build_qt
+  ;;
+lock)
+  build_qt 2>/dev/null
+  while IFS= read -r f; do
+    out="$qt_cache/$(name_of "$f").qsb"
+    [[ -s $out ]] || continue
+    # Counts as shown, so the screensaver's rotation moves past it too.
+    mkdir -p "$state"
+    printf '%s showing %s (lock format)\n' "$(date '+%F %T')" "$f" >>"$state/log"
+    # One line for the lock screen: shader, render scale, frame-rate cap and
+    # seconds before the display turns off, tab-separated.
+    printf '%s\t%s\t%s\t%s\n' "$out" "$(setting lock_render_scale 0.5)" \
+      "$(setting max_fps 30)" "$(setting lock_blank_seconds 300)"
+    exit 0
+  done < <(pick)
+  die "no shader in $dir runs on the lock screen"
   ;;
 cycle)
   seconds=$(setting cycle_seconds 3)

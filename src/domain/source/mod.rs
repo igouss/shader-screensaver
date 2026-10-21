@@ -179,7 +179,7 @@ const fn is_ident(b: u8) -> bool {
 }
 
 /// Byte offsets where `word` occurs as a whole identifier.
-fn word_positions<'a>(s: &'a str, word: &'a str) -> impl Iterator<Item = usize> + 'a {
+pub(super) fn word_positions<'a>(s: &'a str, word: &'a str) -> impl Iterator<Item = usize> + 'a {
     let bytes = s.as_bytes();
     s.match_indices(word).map(|(i, _)| i).filter(move |&i| {
         let before = i.checked_sub(1).map(|j| bytes[j]);

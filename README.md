@@ -46,8 +46,13 @@ line to add.
 Adding or removing a shader commits to this repo automatically. While cycling, a
 notification names the shader on screen, and deletions are pushed when you quit.
 
-Settings live in `settings.conf`: `cycle_seconds` (default 3), `render_scale` and
-`max_fps`.
+The lock screen (an Omarchy shell plugin) draws the same shaders through a Qt
+`ShaderEffect`. `screensaver-shaders qt` compiles the collection for it with Qt's
+`qsb` into `~/.cache/shader-screensaver/qt`, rebuilding only changed shaders, and
+`screensaver-shaders lock` picks the next one and logs it as shown.
+
+Settings live in `settings.conf`: `cycle_seconds` (default 3), `render_scale`,
+`max_fps`, and for the lock screen `lock_render_scale` and `lock_blank_seconds`.
 
 ## Develop
 
