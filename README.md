@@ -16,7 +16,9 @@ rotation avoids recent repeats.
   class, so idle and lock behaviour is unchanged.
 - `skill/` is a Claude Code skill (`/screensaver`) that adds pasted shaders, removes
   them and writes new ones.
-- `shaders/` is the collection.
+- `shaders/` is the collection. Besides shaders it holds `sharks.ascii` and
+  `koi.ascii`: in their turn the launcher runs ascii-aquarium
+  (~/Projects/ascii-aquarium) instead of the renderer, if it is installed.
 
 ## Install
 

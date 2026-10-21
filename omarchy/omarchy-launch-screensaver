@@ -3,12 +3,14 @@
 # Override of Omarchy's omarchy-launch-screensaver, found first through a PATH
 # line in ~/.bashrc. Runs the GLSL shader screensaver on every monitor: shaders
 # that were never shown go first, then a rotation that avoids recent repeats
-# (see `screensaver-shaders pick`). Falls back to the stock terminal screensaver
-# if the renderer isn't built.
+# (see `screensaver-shaders pick`). An ascii-aquarium scene (sharks.ascii,
+# koi.ascii) takes its turn in the same rotation. Falls back to the
+# stock terminal screensaver if the renderer isn't built.
 
 bin="$HOME/.local/bin/shader-screensaver"
 helper="$HOME/.local/bin/screensaver-shaders"
 shaders="${XDG_CONFIG_HOME:-$HOME/.config}/shader-screensaver/shaders"
+aquarium="$HOME/.local/bin/ascii-aquarium"
 
 settings="$(dirname "$(readlink -f "$0")")/../settings.conf"
 
@@ -66,8 +68,15 @@ wait_for_screensaver_window() {
 }
 
 # Playlist in priority order; the renderer shows the first one that compiles.
+# An ascii scene first in line plays instead, if ascii-aquarium is installed;
+# otherwise it is skipped.
+mapfile -t playlist < <("$helper" pick 2>/dev/null)
+scene=
+if [[ ${playlist[0]:-} == *.ascii && -x $aquarium ]]; then
+  scene=${playlist[0]}
+fi
 args=()
-while IFS= read -r f; do args+=(--shader "$f"); done < <("$helper" pick 2>/dev/null)
+for f in "${playlist[@]}"; do [[ $f == *.ascii ]] || args+=(--shader "$f"); done
 ((${#args[@]})) || args=(--shader "$shaders")
 
 # One seed for all monitors so any random fallback matches too.
@@ -81,7 +90,11 @@ fi
 
 for m in $(hyprctl monitors -j | jq -r '.[] | .name'); do
   hypr_focus_monitor "$m"
-  hypr_exec "$bin" --app-id org.omarchy.screensaver --scale "$scale" --max-fps "$max_fps" --seed "$seed" --log "$log" "${args[@]}"
+  if [[ -n $scene ]]; then
+    hypr_exec "$aquarium" --app-id org.omarchy.screensaver --max-fps "$max_fps" --seed "$seed" --log "$log" "$scene"
+  else
+    hypr_exec "$bin" --app-id org.omarchy.screensaver --scale "$scale" --max-fps "$max_fps" --seed "$seed" --log "$log" "${args[@]}"
+  fi
   wait_for_screensaver_window
 done
 
