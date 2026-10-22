@@ -83,6 +83,12 @@ random_name() {
   die "no unused random name found in $words"
 }
 
+# The rotation's run log, where a show outside a rotation run is logged so the
+# rotation moves past it; empty without screensaver-rotation.
+rotation_log() {
+  screensaver-rotation log-path 2>/dev/null || true
+}
+
 # The collection's shaders in the order the rotation would show them
 # (screensaver-rotation owns the rotation), or shuffled when it isn't
 # installed or doesn't list them.
@@ -199,8 +205,11 @@ lock)
     out="$qt_cache/$(name_of "$f").qsb"
     [[ -s $out ]] || continue
     # Counts as shown, so the rotation moves past it too.
-    mkdir -p "$state"
-    printf '%s showing %s (lock format)\n' "$(date '+%F %T')" "$f" >>"$state/log"
+    log=$(rotation_log)
+    if [[ -n $log ]]; then
+      mkdir -p "${log%/*}"
+      printf '%s showing %s (lock format)\n' "$(date '+%F %T')" "$f" >>"$log"
+    fi
     # One line for the lock screen: shader, render scale, frame-rate cap and
     # seconds before the display turns off, tab-separated.
     printf '%s\t%s\t%s\t%s\n' "$out" "$(setting lock_render_scale 0.5)" \
@@ -224,7 +233,12 @@ cycle)
     note=$(omarchy-notification-send -p -r "$note" --app-name shader-screensaver "$1" "$2" 2>/dev/null || echo 0)
   }
 
-  mkdir -p "$state"
+  # The shaders cycled through count as shown, so the rotation moves past them.
+  log=$(rotation_log) log_args=()
+  if [[ -n $log ]]; then
+    mkdir -p "${log%/*}"
+    log_args=(--log "$log")
+  fi
   deleted=0 deleted_note=""
   while IFS=$'\t' read -r event a b c; do
     case $event in
@@ -244,9 +258,9 @@ cycle)
       ;;
     esac
   done < <("$bin" --cycle "$seconds" --scale "$(setting render_scale 1.0)" --max-fps "$(setting max_fps 0)" \
-    --log "$state/log" "${args[@]}")
+    "${log_args[@]}" "${args[@]}")
   if ! wait "$!"; then
-    echo "screensaver-shaders: the viewer failed; see $state/log" >&2
+    echo "screensaver-shaders: the viewer failed${log:+; see $log}" >&2
   fi
 
   if ((deleted)) && git -C "$dir" rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1; then
