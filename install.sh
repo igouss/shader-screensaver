@@ -1,8 +1,9 @@
 #!/bin/bash
 
 # Install the shader screensaver from this checkout: build the renderer and
-# symlink the helper, the Omarchy launcher override, the shader collection and
-# the Claude Code skill into place.
+# symlink the helper, the shader collection and the Claude Code skill into
+# place, and link the runner into screensaver-rotation, which picks what the
+# screensaver shows.
 
 set -euo pipefail
 
@@ -35,17 +36,6 @@ install -Dm755 "$repo/target/release/shader-screensaver" "$HOME/.local/bin/shade
 echo "built ~/.local/bin/shader-screensaver"
 
 link "$repo/bin/screensaver-shaders" "$HOME/.local/bin/screensaver-shaders"
-link "$repo/omarchy/omarchy-launch-screensaver" "$HOME/.local/share/omarchy-overrides/bin/omarchy-launch-screensaver"
 link "$repo/shaders" "${XDG_CONFIG_HOME:-$HOME/.config}/shader-screensaver/shaders"
 link "$repo/skill" "$HOME/.claude/skills/screensaver"
-
-if ! grep -qs 'omarchy-overrides/bin' "$HOME/.bashrc"; then
-  cat <<'EOF'
-
-One manual step: Omarchy's idle service starts the screensaver through `bash -lc`,
-so the override directory must come first on PATH. Add this to ~/.bashrc right
-after the line that sources Omarchy's env-bootstrap:
-
-  [[ ":$PATH:" == *":$HOME/.local/share/omarchy-overrides/bin:"* ]] || PATH="$HOME/.local/share/omarchy-overrides/bin:$PATH"
-EOF
-fi
+link "$repo/bin/rotation-runner" "$HOME/.local/lib/screensaver-rotation/runners/shaders"

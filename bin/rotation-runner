@@ -1,0 +1,48 @@
+#!/bin/bash
+
+# The shader screensaver as a screensaver-rotation runner. `--list` prints the
+# collection's shaders, one path per line. Otherwise it runs the renderer
+# fullscreen on the given shaders, in order, showing the first that compiles,
+# at the render_scale and max_fps from settings.conf; --app-id, --seed and
+# --log pass straight through.
+
+set -euo pipefail
+shopt -s nullglob
+
+repo="$(dirname "$(readlink -f "$0")")/.."
+settings="$repo/settings.conf"
+dir="${XDG_CONFIG_HOME:-$HOME/.config}/shader-screensaver/shaders"
+bin="$HOME/.local/bin/shader-screensaver"
+
+# A value from settings.conf, or $2 when it isn't set there.
+setting() {
+  local value
+  value=$(sed -nE "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*([^#[:space:]]+).*/\1/p" "$settings" 2>/dev/null | tail -n1)
+  echo "${value:-$2}"
+}
+
+if [[ ${1:-} == --list ]]; then
+  for f in "$dir"/*.frag "$dir"/*.glsl; do printf '%s\n' "$f"; done
+  exit 0
+fi
+
+args=()
+while (($#)); do
+  case $1 in
+  --app-id | --seed | --log)
+    (($# >= 2)) || { echo "rotation-runner: $1 needs a value" >&2; exit 2; }
+    args+=("$1" "$2")
+    shift 2
+    ;;
+  --*)
+    echo "rotation-runner: unknown option $1" >&2
+    exit 2
+    ;;
+  *)
+    args+=(--shader "$1")
+    shift
+    ;;
+  esac
+done
+
+exec "$bin" --scale "$(setting render_scale 1.0)" --max-fps "$(setting max_fps 0)" "${args[@]}"
