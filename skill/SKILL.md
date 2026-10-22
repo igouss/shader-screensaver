@@ -49,7 +49,7 @@ surprise the next time the screensaver runs.
 ## Last shown / delete
 
 - "What was the last one?" → `screensaver-shaders last`. For more context,
-  `screensaver-shaders history 5`.
+  `screensaver-rotation history 5`.
 - "Delete the last one" → `screensaver-shaders remove last`, then push.
 - "Delete <name>" → `screensaver-shaders remove <name>`, then push. If the name is
   partial or ambiguous, show the matches from `screensaver-shaders list` and ask.

@@ -26,10 +26,7 @@ usage: screensaver-shaders <command>
   check <file> [png]   compile a shader offscreen; with png, also render a thumbnail
                        and report brightness, motion and cost
   last                 name of the shader shown most recently
-  history [n]          when each of the last n (default 20) shaders was shown
-  list                 the collection, with when each was last shown (or "new")
-  pick                 the order the next screensaver run will try shaders in; an
-                       ascii-aquarium scene (sharks.ascii, koi.ascii) takes a turn too
+  list                 the collection's shader names
   qt                   compile the collection for the lock screen (Qt ShaderEffect .qsb
                        files in ~/.cache/shader-screensaver/qt); only changed shaders rebuild
   lock                 the compiled shader the lock screen shows next (logged as shown),
@@ -86,32 +83,16 @@ random_name() {
   die "no unused random name found in $words"
 }
 
-# shown[name] ="YYYY-MM-DD HH:MM:SS" it was last shown, from the run log.
-declare -A shown=()
-load_shown() {
-  [[ -f $state/log ]] || return 0
-  local name when
-  while IFS=$'\t' read -r name when; do shown[$name]=$when; done < <(
-    sed -nE 's|^([0-9-]+ [0-9:]+) showing .*/([^/]+)\.[a-z]+ \(.*\)$|\2\t\1|p' "$state/log")
-}
-
-# Playlist, best first: never-shown shaders (shuffled), then the half of the
-# collection shown longest ago (shuffled), then the rest oldest-first as
-# fallbacks. A shader can't come back until about half the others have played.
-pick() {
-  load_shown
-  local f name unseen=() seen=() sorted=()
-  for f in "$dir"/*.frag "$dir"/*.glsl "$dir"/*.ascii; do
-    name=$(name_of "$f")
-    if [[ -n ${shown[$name]:-} ]]; then seen+=("${shown[$name]}"$'\t'"$f"); else unseen+=("$f"); fi
-  done
-
-  if ((${#unseen[@]})); then printf '%s\n' "${unseen[@]}" | shuf; fi
-  if ((${#seen[@]})); then
-    mapfile -t sorted < <(printf '%s\n' "${seen[@]}" | sort | cut -f2-)
-    local half=$(((${#sorted[@]} + 1) / 2))
-    printf '%s\n' "${sorted[@]:0:half}" | shuf
-    if ((${#sorted[@]} > half)); then printf '%s\n' "${sorted[@]:half}"; fi
+# The collection's shaders in the order the rotation would show them
+# (screensaver-rotation owns the rotation), or shuffled when it isn't
+# installed or doesn't list them.
+shader_order() {
+  local order
+  order=$(screensaver-rotation pick --runner shaders 2>/dev/null | cut -f2-) || true
+  if [[ -n $order ]]; then
+    printf '%s\n' "$order"
+  else
+    printf '%s\n' "$dir"/*.frag "$dir"/*.glsl | shuf
   fi
 }
 
@@ -206,19 +187,8 @@ check)
 last)
   last_name
   ;;
-history)
-  [[ -f $state/log ]] || die "no shader has been shown yet"
-  grep -h ' showing ' "$state/log" | tail -n "${2:-20}" | sed -E 's| showing .*/([^/]+)\.[a-z]+ \((.*) format\)$|  \1  (\2)|'
-  ;;
 list)
-  load_shown
-  for f in "$dir"/*.frag "$dir"/*.glsl "$dir"/*.ascii; do
-    name=$(name_of "$f")
-    printf '%-24s %s\n' "$name" "${shown[$name]:-new}"
-  done
-  ;;
-pick)
-  pick
+  for f in "$dir"/*.frag "$dir"/*.glsl; do name_of "$f"; done
   ;;
 qt)
   build_qt
@@ -228,7 +198,7 @@ lock)
   while IFS= read -r f; do
     out="$qt_cache/$(name_of "$f").qsb"
     [[ -s $out ]] || continue
-    # Counts as shown, so the screensaver's rotation moves past it too.
+    # Counts as shown, so the rotation moves past it too.
     mkdir -p "$state"
     printf '%s showing %s (lock format)\n' "$(date '+%F %T')" "$f" >>"$state/log"
     # One line for the lock screen: shader, render scale, frame-rate cap and
@@ -236,13 +206,12 @@ lock)
     printf '%s\t%s\t%s\t%s\n' "$out" "$(setting lock_render_scale 0.5)" \
       "$(setting max_fps 30)" "$(setting lock_blank_seconds 300)"
     exit 0
-  done < <(pick)
+  done < <(shader_order)
   die "no shader in $dir runs on the lock screen"
   ;;
 cycle)
   seconds=$(setting cycle_seconds 3)
-  # Shaders only: the ascii scenes run in a terminal, not the renderer.
-  mapfile -t playlist < <(pick | grep -v '\.ascii$')
+  mapfile -t playlist < <(shader_order)
   ((${#playlist[@]})) || die "the collection is empty"
   args=()
   for f in "${playlist[@]}"; do args+=(--shader "$f"); done
