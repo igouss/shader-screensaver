@@ -184,7 +184,7 @@ remove)
   ;;
 preview)
   if [[ -n ${2:-} ]]; then target=$(resolve "$2"); else target=$dir; fi
-  exec "$bin" --shader "$target"
+  exec "$bin" --app-id org.omarchy.shader-preview --shader "$target"
   ;;
 check)
   [[ -n ${2:-} ]] || usage
@@ -257,7 +257,7 @@ cycle)
       echo "  deleted $(name_of "$a")"
       ;;
     esac
-  done < <("$bin" --cycle "$seconds" --scale "$(setting render_scale 1.0)" --max-fps "$(setting max_fps 0)" \
+  done < <("$bin" --app-id org.omarchy.shader-preview --cycle "$seconds" --scale "$(setting render_scale 1.0)" --max-fps "$(setting max_fps 0)" \
     "${log_args[@]}" "${args[@]}")
   if ! wait "$!"; then
     echo "screensaver-shaders: the viewer failed${log:+; see $log}" >&2
